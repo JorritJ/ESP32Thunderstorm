@@ -2,7 +2,7 @@
 #pragma once
 #include <Arduino.h>
 
-constexpr uint32_t BTN_DEBOUNCE_MS = 25; // debounce delay
+constexpr uint32_t BTN_DEBOUNCE_MS = 50; // debounce delay, typically 25 ms - 50 ms
 
 struct Button
 {
@@ -19,3 +19,4 @@ struct Button
     void update(uint32_t now);
     bool consumePressed();
 };
+

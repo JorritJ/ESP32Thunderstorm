@@ -34,6 +34,7 @@ Het geheel is non-blocking, reageert continu op knoppen en kan eenvoudig worden 
 | VCC         | 5 V                                  |
 | GND         | GND                                  |
 
+1 kΩ serieweerstand op TX naar RX van de sv5w voorkomt oversturing van de ingang. 1 kΩ pulldown naar GND
 ---
 
 ## Installatie & Build
@@ -54,12 +55,14 @@ build_flags = -DCORE_DEBUG_LEVEL=0
 ### 2. Mappenstructuur
 
 ```
-/lib
- ├── Button/
- ├── LedPwm/
- ├── LedSet/
- ├── LightProgram/
- ├── SV5W/
+/data/
+/include
+ ├── Button.h
+ ├── Config.h
+ ├── LedPwm.h
+ ├── LedSet.h
+ ├── LightProgram.h
+ ├── SV5W.h
  └── Config.h
 /src
  └── example_usage.ino
@@ -166,5 +169,47 @@ De `SV5W`-klasse ondersteunt:
 * Fade-overgangen tussen modi
 * Audio-sync via BUSY-pin
 * Externe configuratie via webinterface of Bluetooth
+
+---
+## Wiring
+
+1. LEDs
+NPN-transistor (bijv. BC547(CBE) / 2N2222 (EBC))
+5V ---/\/\/---|>|----+--- (collector)
+              LED    |
+                     |
+                     C NPN transistor
+ESP32 PWM ---[1KΩ]---B (1 kΩ basisweerstand)
+                     E
+                     |
+                    GND
+
+MOSFET (bijv. IRLZ44N, AO3400, 2N7002)
+5V ---/\/\/---|>|------+--- D (drain)
+              LED      |
+                       S (source)
+                       |
+                      GND
+ESP32 PWM ----[100Ω]---G (gate)
+
+2. componentwaarden
+Onderdeel	Waarde	Opmerking
+R_LED	220 Ω – 470 Ω	afhankelijk van LED en gewenste helderheid
+R_BASE (transistor)	1 kΩ	beperkt basisstroom tot ±3 mA
+R_GATE (MOSFET)	100 Ω	voorkomt oscillatie bij snelle PWM
+
+---
+
+Onderdeel	Aantal	Voorbeeldtype	Opmerking
+ESP32 Dev Kit	1	DOIT ESP32 DEVKIT V1	Hoofdcontroller
+DY-SV5W Module	1	DY-SV5W	Geluidsmodule (UART-modus)
+LED’s (5 mm / 3 mm)	4–8	willekeurige kleuren	20 mA, max. 2.0–3.3 V per LED
+Weerstanden LED	4–8	220–470 Ω	in serie met elke LED
+NPN-transistoren	4	BC547 / 2N2222	schakelen LED’s op 5 V (of gebruik MOSFETs)
+MOSFETs (alternatief)	4	2N7002 / AO3400 / IRLZ44N	Logic-level, lage gate threshold
+Weerstanden basis/gate	4	1 kΩ (transistor) / 100 Ω (MOSFET)	aansturing vanaf ESP32-pin
+5V voeding	1	5V DC adapter, 1A	voor ESP32, DY-SV5W en LED’s
+Breadboard & jumpers	-	-	voor prototyping
+Draden (GND-koppeling)	-	-	verbind alle GND’s!
 
 -

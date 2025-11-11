@@ -24,8 +24,8 @@ constexpr int PIN_BUSY = 4; // SV5W BUSY (actief LOW)
 constexpr int PIN_BTN_NEXT = 12; // active LOW, interne pull-up
 constexpr int PIN_BTN_PREV = 14; // active LOW, interne pull-up
 
-constexpr int PIN_BTN_VOL_UP = 27; // active LOW, interne pull-up
-constexpr int PIN_BTN_VOL_DOWN = 33; // active LOW, interne pull-up
+constexpr int PIN_BTN_VOL_UP = 18; // active LOW, interne pull-up
+constexpr int PIN_BTN_VOL_DOWN = 19; // active LOW, interne pull-up
 
 
 // === LED PWM (LEDC) ===

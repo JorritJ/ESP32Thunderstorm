@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<export version="D">
+  <components>
+    <!-- Controllers -->
+    <comp ref="U1">
+      <value>ESP32-DEVKIT</value>
+      <footprint>Module:ESP32-DevKitC</footprint>
+    </comp>
+    <comp ref="U2">
+      <value>DY-SV5W</value>
+      <footprint>Module:DY-SV5W</footprint>
+    </comp>
+
+```
+<!-- MOSFET LED drivers (logic-level) -->
+<comp ref="Q1"><value>AO3400A</value><footprint>Package_TO_SOT_SMD:SOT-23</footprint></comp>
+<comp ref="Q2"><value>AO3400A</value><footprint>Package_TO_SOT_SMD:SOT-23</footprint></comp>
+<comp ref="Q3"><value>AO3400A</value><footprint>Package_TO_SOT_SMD:SOT-23</footprint></comp>
+<comp ref="Q4"><value>AO3400A</value><footprint>Package_TO_SOT_SMD:SOT-23</footprint></comp>
+
+<!-- Gate resistors -->
+<comp ref="RG1"><value>100R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+<comp ref="RG2"><value>100R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+<comp ref="RG3"><value>100R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+<comp ref="RG4"><value>100R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+
+<!-- LED series resistors (to +5V) -->
+<comp ref="RL1"><value>330R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+<comp ref="RL2"><value>330R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+<comp ref="RL3"><value>330R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+<comp ref="RL4"><value>330R</value><footprint>Resistor_SMD:R_0603_1608Metric</footprint></comp>
+
+<!-- LEDs (anodes to +5V via RLx, cathodes to MOSFET drains) -->
+<comp ref="D1"><value>LED</value><footprint>LED_SMD:LED_1206_3216Metric</footprint></comp>
+<comp ref="D2"><value>LED</value><footprint>LED_SMD:LED_1206_3216Metric</footprint></comp>
+<comp ref="D3"><value>LED</value><footprint>LED_SMD:LED_1206_3216Metric</footprint></comp>
+<comp ref="D4"><value>LED</value><footprint>LED_SMD:LED_1206_3216Metric</footprint></comp>
+
+<!-- Buttons (to GND, use INPUT_PULLUP in firmware) -->
+<comp ref="SW1"><value>BTN_NEXT</value><footprint>Button_Switch_SMD:SW_SPST_PTS645</footprint></comp>
+<comp ref="SW2"><value>BTN_PREV</value><footprint>Button_Switch_SMD:SW_SPST_PTS645</footprint></comp>
+<comp ref="SW3"><value>BTN_VOLUP</value><footprint>Button_Switch_SMD:SW_SPST_PTS645</footprint></comp>
+<comp ref="SW4"><value>BTN_VOLDOWN</value><footprint>Button_Switch_SMD:SW_SPST_PTS645</footprint></comp>
+
+<!-- Power connectors -->
+<comp ref="J1"><value>5V_IN</value><footprint>Connector:Conn_01x02</footprint></comp>
+```
+
+  </components>
+
+  <nets>
+    <!-- Power & GND -->
+    <net code="1" name="GND">
+      <node ref="U1" pin="GND"/>
+      <node ref="U2" pin="GND"/>
+      <node ref="Q1" pin="S"/>
+      <node ref="Q2" pin="S"/>
+      <node ref="Q3" pin="S"/>
+      <node ref="Q4" pin="S"/>
+      <node ref="SW1" pin="2"/>
+      <node ref="SW2" pin="2"/>
+      <node ref="SW3" pin="2"/>
+      <node ref="SW4" pin="2"/>
+      <node ref="J1" pin="2"/>
+    </net>
+
+```
+<net code="2" name="+5V">
+  <node ref="U2" pin="VCC"/>
+  <node ref="RL1" pin="1"/>
+  <node ref="RL2" pin="1"/>
+  <node ref="RL3" pin="1"/>
+  <node ref="RL4" pin="1"/>
+  <node ref="J1" pin="1"/>
+</net>
+
+<!-- UART -->
+<net code="10" name="UART_RX2">
+  <node ref="U1" pin="GPIO16"/>
+  <node ref="U2" pin="TXD"/>
+</net>
+<net code="11" name="UART_TX2">
+  <node ref="U1" pin="GPIO17"/>
+  <node ref="U2" pin="RXD"/>
+</net>
+<net code="12" name="SV5W_BUSY">
+  <node ref="U1" pin="GPIO4"/>
+  <node ref="U2" pin="BUSY"/>
+</net>
+
+<!-- Buttons (INPUT_PULLUP in firmware) -->
+<net code="20" name="BTN_NEXT">
+  <node ref="U1" pin="GPIO12"/>
+  <node ref="SW1" pin="1"/>
+</net>
+<net code="21" name="BTN_PREV">
+  <node ref="U1" pin="GPIO14"/>
+  <node ref="SW2" pin="1"/>
+</net>
+<!-- NOTE: to avoid pin conflict with LED pins, use 18/19 for volume buttons -->
+<net code="22" name="BTN_VOLUP">
+  <node ref="U1" pin="GPIO18"/>
+  <node ref="SW3" pin="1"/>
+</net>
+<net code="23" name="BTN_VOLDOWN">
+  <node ref="U1" pin="GPIO19"/>
+  <node ref="SW4" pin="1"/>
+</net>
+
+<!-- LED channel 1: GPIO25 -> RG1 -> Q1.G; Q1.D -> D1.K; D1.A -> RL1.2 -> +5V -->
+<net code="30" name="LED1_PWM">
+  <node ref="U1" pin="GPIO25"/>
+  <node ref="RG1" pin="1"/>
+</net>
+<net code="31" name="LED1_GATE">
+  <node ref="RG1" pin="2"/>
+  <node ref="Q1" pin="G"/>
+</net>
+<net code="32" name="LED1_CATHODE">
+  <node ref="Q1" pin="D"/>
+  <node ref="D1" pin="K"/>
+</net>
+<net code="33" name="LED1_ANODE">
+  <node ref="D1" pin="A"/>
+  <node ref="RL1" pin="2"/>
+</net>
+
+<!-- LED channel 2: GPIO26 -->
+<net code="34" name="LED2_PWM">
+  <node ref="U1" pin="GPIO26"/>
+  <node ref="RG2" pin="1"/>
+</net>
+<net code="35" name="LED2_GATE">
+  <node ref="RG2" pin="2"/>
+  <node ref="Q2" pin="G"/>
+</net>
+<net code="36" name="LED2_CATHODE">
+  <node ref="Q2" pin="D"/>
+  <node ref="D2" pin="K"/>
+</net>
+<net code="37" name="LED2_ANODE">
+  <node ref="D2" pin="A"/>
+  <node ref="RL2" pin="2"/>
+</net>
+
+<!-- LED channel 3: GPIO27 -->
+<net code="38" name="LED3_PWM">
+  <node ref="U1" pin="GPIO27"/>
+  <node ref="RG3" pin="1"/>
+</net>
+<net code="39" name="LED3_GATE">
+  <node ref="RG3" pin="2"/>
+  <node ref="Q3" pin="G"/>
+</net>
+<net code="40" name="LED3_CATHODE">
+  <node ref="Q3" pin="D"/>
+  <node ref="D3" pin="K"/>
+</net>
+<net code="41" name="LED3_ANODE">
+  <node ref="D3" pin="A"/>
+  <node ref="RL3" pin="2"/>
+</net>
+
+<!-- LED channel 4: GPIO33 -->
+<net code="42" name="LED4_PWM">
+  <node ref="U1" pin="GPIO33"/>
+  <node ref="RG4" pin="1"/>
+</net>
+<net code="43" name="LED4_GATE">
+  <node ref="RG4" pin="2"/>
+  <node ref="Q4" pin="G"/>
+</net>
+<net code="44" name="LED4_CATHODE">
+  <node ref="Q4" pin="D"/>
+  <node ref="D4" pin="K"/>
+</net>
+<net code="45" name="LED4_ANODE">
+  <node ref="D4" pin="A"/>
+  <node ref="RL4" pin="2"/>
+</net>
+```
+
+  </nets>
+</export>

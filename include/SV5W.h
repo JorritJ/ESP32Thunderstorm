@@ -199,11 +199,14 @@ public:
   Response queryCurrentSong()           { return sendAndRead(Command::QUERY_CURRENT_SONG); }
   Response queryFolderDirSong()         { return sendAndRead(Command::QUERY_FOLDER_DIR_SONG); }
   Response queryFolderSongCount()       { return sendAndRead(Command::QUERY_FOLDER_SONG_COUNT); }
-  Response queryVersion() { return sendAndRead(Command::QUERY_VERSION); }
+  Response queryVersion()               { return sendAndRead(Command::QUERY_VERSION); }
 
   // Low-level: send arbitrary command with a data buffer
   void sendWithData(Command cmd, const uint8_t* data, uint8_t len) {
-    if (!serial_) return;
+    if (!serial_){
+      //Serial.println(F("ERROR: no serial!"));
+      return;
+    } 
     const uint8_t start = 0xAA; //Start byte SV5W command
     const uint8_t c = (uint8_t)cmd;
     uint8_t checksum = start + c + len;

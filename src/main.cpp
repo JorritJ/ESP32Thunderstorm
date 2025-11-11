@@ -8,6 +8,18 @@
 #include "Config.h"
 #include "LedSet.h"
 
+/*
+// ======= CONDITIONELE INCLUDES =======
+#ifdef HARDWARE_A
+  #include <SensorA.h>
+#elif defined(HARDWARE_B)
+  #include <SensorB.h>
+#else
+  #error "Geen hardwaretype gedefinieerd! Gebruik HARDWARE_A of HARDWARE_B."
+#endif
+*/
+
+
 // ===================== Serial2 definitie (indien core het niet aanbiedt) =====================
 //HardwareSerial Serial2(2);   // gebruik UART2 (hardware poort 2)
 
@@ -28,6 +40,13 @@ Button btnVolDown(Config::PIN_BTN_VOL_DOWN, true);
 SV5W sv5w;
 constexpr uint16_t TRACK_THUNDER = 1; // pas aan naar jouw index/bestandsnaam
 constexpr uint16_t TRACK_DAY = 2; // pas aan naar jouw index/bestandsnaam
+
+// --- SV5W BUSY monitoring (active LOW)
+static bool busyState = false;               // gefilterde/stabiele staat
+static bool busyRaw   = false;               // laatst gemeten raw
+static uint32_t busyLastEdgeMs = 0;          // laatste raw edge
+static const uint32_t BUSY_DEBOUNCE_MS = 5;  // kleine debounce tegen rammel
+inline bool sv5wBusyRaw() { return digitalRead(Config::PIN_BUSY) == LOW; } // LOW = playing
 
 // ===================== Lichtprogramma's =====================
 //ProgThunder progThunder(led1, led2);
@@ -101,6 +120,11 @@ void setup()
   btnNext.begin();
   btnPrev.begin();
   
+  //sv5w BUSY pin initialiseren
+  busyRaw   = sv5wBusyRaw();
+  busyState = busyRaw;
+  Serial.printf("SV5W BUSY init: %s (active LOW)\n", busyState ? "ACTIVE (playing)" : "IDLE");
+
   // LED kanalen initialiseren
   //led1.begin(); 
   //led2.begin();
@@ -130,6 +154,16 @@ void setup()
   // Kies desgewenst standaard-drive (0x00=USB, 0x01=SD, 0x02=FLASH)
   sv5w.setDefaultDrive(0x01);
 
+// (Optioneel) huidige afspeeldrive uitlezen (test communicatie)
+  auto playdrive = sv5w.queryCurrentPlayDrive();
+  if (playdrive.valid) {
+    Serial.print(F("SV5W Current Play Drive: "));
+    for (auto b : playdrive.data) { Serial.printf(" %02X", b); }
+    Serial.println();
+  } else {
+    Serial.println(F("SV5W Current Play Drive query failed."));
+  }
+
   /*
     De meeste ESP32-boards (zoals de “ESP32 Dev Module” of “DOIT ESP32 DEVKIT V1”) hebben: HardwareSerial Serial2(2); al voor je gedefinieerd.
     Maar sommige (bijv. ESP32-S3, ESP32-C3 of een minimal core in PlatformIO) doen dat niet automatisch.
@@ -140,6 +174,8 @@ void setup()
     Serial.print(F("SV5W Version bytes:"));
   for (auto b : ver.data) { Serial.printf(" %02X", b); }
     Serial.println();
+  } else {
+    Serial.println(F("SV5W Version query failed."));
   }
 
   uint32_t now = millis();
@@ -166,16 +202,35 @@ void loop()
   btnVolUp.update(now);
   btnVolDown.update(now);
 
-  if (btnNext.consumePressed())
-    nextMode(now);
-  if (btnPrev.consumePressed())
-    prevMode(now);
+  // --- SV5W BUSY monitoring met debounce
+  bool r = sv5wBusyRaw();
+  if (r != busyRaw) {
+    busyRaw = r;
+    busyLastEdgeMs = now; // start debounce
+  }
+  if (r != busyState && (now - busyLastEdgeMs) >= BUSY_DEBOUNCE_MS) {
+    busyState = r;
+    Serial.printf("[%lu ms] SV5W BUSY %s\n",
+                  (unsigned long)now,
+                  busyState ? "ACTIVE (playing)" : "IDLE");
+  }
 
+  if (btnNext.consumePressed()) {
+    Serial.println(F("Modus wisselen: NEXT"));
+    nextMode(now);
+  }
+    
+  if (btnPrev.consumePressed()) {
+    Serial.println(F("Modus wisselen: PREV"));  
+    prevMode(now);
+  }
+  //Volume bediening (optioneel) uitgezet ivm storing/debounce
+  /*
   if (btnVolUp.consumePressed()){
     if(volume < Config::VOLUME_MAX) {
       volume++;
       sv5w.setVolume(volume);
-      //Serial.print(F("Volume verhoogd naar ")); Serial.println(volume);
+      Serial.print(F("Volume verhoogd naar ")); Serial.println(volume);
       //sv5w.increaseVolume();
     }
   }
@@ -183,10 +238,11 @@ void loop()
     if(volume > Config::VOLUME_MIN) {
       volume--;
       sv5w.setVolume(volume);
-      //Serial.print(F("Volume verlaagd naar ")); Serial.println(volume);
+      Serial.print(F("Volume verlaagd naar ")); Serial.println(volume);
       //sv5w.decreaseVolume();
     }
   }
+    */
   if (currentProg)
     currentProg->update(now);
 
