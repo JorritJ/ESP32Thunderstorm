@@ -30,6 +30,7 @@ Button btnPrev{Config::PIN_BTN_PREV,true};
 Button btnVolUp(Config::PIN_BTN_VOL_UP, true);
 Button btnVolDown(Config::PIN_BTN_VOL_DOWN, true);
 
+
 // ===================== DY-SV5W =====================
 SV5W sv5w;
 constexpr uint16_t TRACK_THUNDER = Config::TRACK_THUNDER; // pas aan naar jouw index/bestandsnaam
@@ -41,6 +42,7 @@ static bool busyRaw   = false;               // laatst gemeten raw
 static uint32_t busyLastEdgeMs = 0;          // laatste raw edge
 static const uint32_t BUSY_DEBOUNCE_MS = 5;  // kleine debounce tegen rammel
 inline bool sv5wBusyRaw() { return digitalRead(Config::PIN_BUSY) == LOW; } // LOW = playing
+
 
 // ===================== Lichtprogramma's =====================
 enum class Mode
@@ -59,6 +61,7 @@ static LedPwmChannel* LEDS[Config::LED_COUNT];
 // LedSets per scenario:
 static LedSet* thunderSetPtr = nullptr;
 static LedSet* daySetPtr     = nullptr;
+static LedSet* blinkSetPtr   = nullptr;
 
 // Programma’s als pointers:
 static ProgThunder* progThunderPtr = nullptr;
@@ -124,7 +127,9 @@ void setup()
   
   //sv5w BUSY pin initialiseren
   busyRaw   = sv5wBusyRaw();
+  delay(100);
   busyState = busyRaw;
+  delay(100);
   Serial.printf("SV5W BUSY init: %s (active LOW)\n", busyState ? "ACTIVE (playing)" : "IDLE");
 
   // LED kanalen initialiseren
@@ -136,21 +141,29 @@ void setup()
   }
 
   // LedSets per scenario (met weights uit Config)
-  thunderSetPtr = new LedSet(LEDS, Config::LED_COUNT, Config::SCENARIO_THUNDER_WEIGHTS);
-  daySetPtr     = new LedSet(LEDS, Config::LED_COUNT, Config::SCENARIO_DAY_WEIGHTS);
+  thunderSetPtr = new LedSet(LEDS, Config::LED_COUNT, Config::LEDSET_THUNDER_WEIGHTS);
+  daySetPtr     = new LedSet(LEDS, Config::LED_COUNT, Config::LEDSET_DAY_WEIGHTS);
+  blinkSetPtr   = new LedSet(LEDS, Config::LED_COUNT, Config::LEDSET_BLINK_WEIGHTS); // <— nieuw
 
   // Programma’s aanmaken op die sets
-  progThunderPtr = new ProgThunder(*thunderSetPtr, Config::SCENARIO_THUNDER_WEIGHTS);
-  progDayPtr     = new ProgDay(*daySetPtr,       Config::SCENARIO_DAY_WEIGHTS);
+  progThunderPtr = new ProgThunder(*thunderSetPtr, Config::LEDSET_THUNDER_WEIGHTS);
+  progDayPtr     = new ProgDay(*daySetPtr,       Config::LEDSET_DAY_WEIGHTS);
   
+  //start knipper-overlay (optioneel)
+  gBlink.start(millis(), 500, 50, 1.0f, 0.0f); //test: start knipper-overlay (500ms periode, 50% duty)
+  //gBlink.start(millis(), 800, 50, 1.0f, 0.3f); //test: start knipper-overlay (800ms periode, 50% duty, 30% brightness)
+  //gBlink.stop(blinkSetPtr); //standaard uitzetten
+
   // SV5W init
   sv5w.begin(Serial2, Config::UART_RX_PIN, Config::UART_TX_PIN, Config::UART_BAUD);
+  delay(100);
   sv5w.setVolume(Config::VOLUME_DEFAULT);
   // Kies desgewenst standaard-drive (0x00=USB, 0x01=SD, 0x02=FLASH)
   sv5w.setDefaultDrive(0x01);
 
   // (Optioneel) huidige afspeeldrive uitlezen (test communicatie)
   auto playdrive = sv5w.queryCurrentPlayDrive();
+  delay(100);
   if (playdrive.valid) {
     Serial.print(F("SV5W Current Play Drive: "));
     for (auto b : playdrive.data) { Serial.printf(" %02X", b); }
@@ -161,15 +174,17 @@ void setup()
 
   // (Optioneel) firmwareversie uitlezen
   auto ver = sv5w.queryVersion();
+  delay(100);
   if (ver.valid) {
     Serial.print(F("SV5W Version bytes:"));
-  for (auto b : ver.data) { Serial.printf(" %02X", b); }
+    for (auto b : ver.data) { Serial.printf(" %02X", b); }
     Serial.println();
   } else {
     Serial.println(F("SV5W Version query failed."));
   }
 
   uint32_t now = millis();
+  
   if (btnNext.readRaw())  {
     startMode(Mode::Day, now);
     Serial.println(F("Start in DAY mode (NEXT ingedrukt)."));
@@ -237,16 +252,15 @@ void loop()
     }
   }
   
-
   if (currentProg)
     currentProg->update(now);
 
-  // Overlay toepassen op het actieve LedSet (na het programma)
-  if(auto* set = activeSet()) {
-    gBlink.update(now, *set);
+  if (blinkSetPtr) {
+    gBlink.update(now, *blinkSetPtr);
   }
+   
   //
-    LedSet* activeSet = (currentMode == Mode::Thunder) ? thunderSetPtr : daySetPtr;
-    if (activeSet) gBlink.update(now, *activeSet);
+  //LedSet* activeSet = (currentMode == Mode::Thunder) ? thunderSetPtr : daySetPtr;
+  //if (activeSet) gBlink.update(now, *activeSet);
 
 }

@@ -57,15 +57,19 @@ build_flags = -DCORE_DEBUG_LEVEL=0
 ```
 /data/
 /include
+ ├── BlinkOverlay.h
  ├── Button.h
  ├── Config.h
  ├── LedPwm.h
  ├── LedSet.h
  ├── LightProgram.h
- ├── SV5W.h
- └── Config.h
+ └── SV5W.h
 /src
- └── example_usage.ino
+ ├── Button.cpp
+ ├── LedPwm.cpp
+ ├── LightProgram.cpp
+ ├── main.cpp
+ └── Sv5W.cpp
 ```
 
 ### 3. Build & upload

@@ -6,7 +6,7 @@ class LedSet {
 public:
   
   // channels = array van pointers of referenties is ook prima; hier nemen we pointer naar array
-  LedSet(LedPwmChannel** channels, int count, const float* weights /*size=count*/)
+  LedSet(LedPwmChannel** channels, int count, const float* weights)
     : chans(channels), n(count), w(weights) {}
   
   void setOverlay(float f) {             // 0..1
@@ -24,6 +24,26 @@ public:
     }
   }
 
+  // Schrijf alleen kanalen met w[i] > 0  (handig voor overlay/blink)
+  void setAllScaledMasked(uint16_t duty) {
+    for (int i = 0; i < n; ++i) {
+      if (!w || w[i] <= 0.0f) continue;            // kanaal overslaan
+      uint32_t d = (uint32_t)(w[i] * duty);
+      d = (uint32_t)(overlayFactor * d);
+      if (d > 65535u) d = 65535u;
+      chans[i]->setDuty((uint16_t)d);
+    }
+  }
+
+  // Schrijf 1 kanaal, met weight-mask en overlay
+  void setOneScaledMasked(int i, uint16_t duty) {
+    if (!w || i < 0 || i >= n || w[i] <= 0.0f) return;   // alleen geselecteerde kanalen
+    uint32_t d = (uint32_t)(w[i] * duty);
+    d = (uint32_t)(overlayFactor * d);
+    if (d > 65535u) d = 65535u;
+    chans[i]->setDuty((uint16_t)d);
+  }
+
   void setAll(uint16_t duty) { // geen weight
     for (int i = 0; i < n; ++i) chans[i]->setDuty(duty);
   }
@@ -34,6 +54,8 @@ public:
   }
 
   int size() const { return n; }
+
+
 
 private:
   LedPwmChannel** chans;

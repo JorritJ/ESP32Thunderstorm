@@ -2,34 +2,49 @@
 #pragma once
 #include <Arduino.h>
 #include "LedSet.h"
+
 class BlinkOverlay {
 public:
-    void start(uint32_t now, uint32_t periodMS = 1000, uid_t dutyPercent = 50, float offFactor = 0.0f) {
-        enabled=true;
-        period=periodMS;
-        duty = constrain(dutyPercent, (uint8_t)1, (uint8_t)99);
-        off = constrain(offFactor, 0.0f, 1.0f);
-        phaseStart = now;
-    }
-    void stop(LedSet* set = nullptr) {
+
+    void start(uint32_t now, uint32_t periodMs = 1000, uint8_t dutyPercent = 50,
+             float onLevel = 1.0f, float offLevel = 0.0f) {
+    enabled = true;
+    period = periodMs;
+    duty   = constrain(dutyPercent, (uint8_t)1, (uint8_t)99);
+    onL    = constrain(onLevel,  0.0f, 1.0f);
+    offL   = constrain(offLevel, 0.0f, 1.0f);
+    phaseStart = now;
+  }
+
+    void stop(LedSet* blinkSet = nullptr) {
         enabled = false;
-        if (set) set->setOverlay(1.0f); // geen overlay meer
+        if (blinkSet) blinkSet->setAllScaledMasked(0); // zet blink-kanalen uit
     }
+
     bool isEnabled() const { return enabled; }
     
-    void update(uint32_t now, LedSet& set) {
+    // NB: stuur hier de BLINK-set in; NIET de actieve thunder/day-set
+    void update(uint32_t now, LedSet& blinkSet) {
         if (!enabled) return;
-        if (period>10) period=10; // clamp values
-        uint32_t t = (now - phaseStart) % period; // tijd in huidige periode
-        uint32_t onTime = (uint32_t)((period*(uint32_t)duty)/100u); // on-time in ms)
-        bool isOn = (t < onTime);
-        set.setOverlay(isOn ? 1.0f : off); // set overlay factor
-}
+        if (period < 10) period = 10;
+
+        uint32_t t = (now - phaseStart) % period;
+        uint32_t onTime = (uint32_t)((period * (uint32_t)duty) / 100u);
+        bool on = (t < onTime);
+
+        // absolute schrijfwijze: kies een duty t.o.v. resolutie van de set
+        uint16_t maxv = blinkSet.maxDuty();
+        uint16_t dutyVal = (uint16_t)((on ? onL : offL) * maxv);
+
+        // schrijf ALLEEN de kanalen die door de blink-set zijn geselecteerd (w[i]>0)
+        blinkSet.setAllScaledMasked(dutyVal);
+    }
 
 private:
-    bool enabled = false;
-    uint32_t period = 1000;
-    uint32_t duty = 50;
-    float off = 0.0f; // 0.0 = volledig uit, 1.0 = geen effect
-    uint32_t phaseStart = 0;
+  bool enabled = false;
+  uint32_t period = 1000;
+  uint8_t  duty   = 50;     // in percent
+  float    onL    = 1.0f;   // 1.0 = vol aan
+  float    offL   = 0.0f;   // 0.0 = uit, of bv. 0.3 = dim
+  uint32_t phaseStart = 0;
 };

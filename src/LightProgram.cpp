@@ -6,13 +6,18 @@
 //ProgThunder::ProgThunder(LedSet &set, const float *weights) : leds(set), w(weights) {}
 
 void ProgThunder::setWithSkew(uint16_t duty, uint32_t now) {
-  uint32_t dt = now - phaseStart;
-  if (dt < chSkewMs) {
-    // korte pre-fase: zet bijvoorbeeld 60% van de intensiteit (geeft het idee dat een deel iets later meekomt)
-    setAll((uint16_t)(duty * 0.6f));
-  } else {
-    setAll(duty);
-  }
+    int n = leds.size();
+    if (n > kMaxCh) n = kMaxCh;
+
+    for (int i = 0; i < n; ++i) {
+        uint32_t chStart = phaseStart + chOffsetMs[i];
+        if (now < chStart) {
+            // zachte pre-arrival gloed per kanaal
+            setOneMasked(i, (uint16_t)(duty * 0.6f));
+        } else {
+            setOneMasked(i, duty);
+        }
+    }
 }
 
 void ProgThunder::scheduleNextBurst(uint32_t now)
@@ -33,6 +38,13 @@ void ProgThunder::prepareBurst(uint32_t now)
     subsTotal = 1 + (esp_random() % 4);
     subsIndex = 0;
     uint16_t maxv = leds.maxDuty();
+    
+    int n = leds.size();
+    if (n > kMaxCh) n = kMaxCh;
+    for (int i = 0; i < n; ++i) {
+        chOffsetMs[i] = (uint16_t)randRange(0, 25);
+    }
+    
     // basisintensiteit 60..100% van max
     float base = 0.60f + 0.40f * rand01();
     for (int i = 0; i < subsTotal; ++i)
@@ -53,13 +65,15 @@ void ProgThunder::prepareBurst(uint32_t now)
     phaseStart = now;
     uint32_t preDur = randRange(10, 40);
     phaseEnd = phaseStart + preDur;
-    setAll(0);
+    setAllMasked(0);
+    // Offsets instellen voor de eerste subflits op basis van de piekintensiteit
+    refreshOffsets(subIntensity[0]);
 }
 
 void ProgThunder::start(uint32_t now)
 {
     phase = Idle;
-    setAll(0);
+    setAllMasked(0);
     scheduleNextBurst(now);
 }
 
@@ -83,7 +97,7 @@ void ProgThunder::update(uint32_t now)
         uint16_t target = (subsTotal > 0) ? (uint16_t)(subIntensity[0] * 0.4f) : 0;
         if (now >= phaseEnd)
         {
-            setAll(target);
+            setAllMasked(target);
             // ga naar eerste flits
             phase = FlashOn;
             phaseStart = now;
@@ -95,7 +109,7 @@ void ProgThunder::update(uint32_t now)
         {
             float t = (float)(now - phaseStart) / (float)(phaseEnd - phaseStart);
             uint16_t d = (uint16_t)(t * target);
-            setAll(d);
+            setAllMasked(d);
         }
         break;
     }
@@ -110,8 +124,9 @@ void ProgThunder::update(uint32_t now)
             phaseStart = now;
             uint32_t offDur = randRange(30, 120); // random tijd uit,
             phaseEnd = phaseStart + offDur;
-            setAll(0);
+            setAllMasked(0);
         }
+        refreshOffsets(subIntensity[subsIndex]);
         break;
     }
 
@@ -148,7 +163,7 @@ void ProgThunder::update(uint32_t now)
         {
             // klaar, terug naar Idle
             phase = Idle;
-            setAll(0);
+            setAllMasked(0);
             scheduleNextBurst(now);
         }
         else
@@ -161,17 +176,37 @@ void ProgThunder::update(uint32_t now)
             if (t > 1)
                 t = 1;
             uint16_t d = (uint16_t)(afterStartDuty * t);
-            setAll(d);
+            setAllMasked(d);
         }
         break;
     }
     }
 }
 
-// ===== ProgDay =====
-//ProgDay::ProgDay(LedPwmChannel &a, LedPwmChannel &b) : ch1(a), ch2(b) {}
-//ProgDay::ProgDay(LedSet &set, const float *weights) : leds(set), w(weights) {}
+void ProgThunder::refreshOffsets(uint16_t intensity) {
+  int n = leds.size();
+  if (n > kMaxCh) n = kMaxCh;
 
+  // Felheid 0..1 omrekenen o.b.v. PWM-maximum
+  float b = 0.0f;
+  uint16_t maxv = leds.maxDuty();
+  if (maxv > 0) b = (float)intensity / (float)maxv;   // 0.0..1.0
+
+  // Eerste subflits strakker, echo's losser.
+  // Heldere flitsen krijgen extra spreiding (via b).
+  uint16_t minMs = (subsIndex == 0) ? 2  : 6;
+  uint16_t baseMax = (subsIndex == 0) ? 12 : 25;
+  uint16_t extra   = (uint16_t)( (subsIndex == 0 ? 10.0f : 15.0f) * b ); // helder = ruimer
+  uint16_t maxMs = baseMax + extra;
+  if (maxMs < minMs + 1) maxMs = minMs + 1; // borging
+
+  for (int i = 0; i < n; ++i) {
+    chOffsetMs[i] = (uint16_t)randRange(minMs, maxMs); // per kanaal random spreiding
+  }
+}
+
+
+// ===== ProgDay =====
 void ProgDay::start(uint32_t now)
 {
     basePhase = 0.f;
@@ -179,14 +214,6 @@ void ProgDay::start(uint32_t now)
     sparkle1 = 0;
     sparkle2 = 0;
 }
-
-/*
-uint16_t ProgDay::toDuty(float x)
-{
-    x = constrain(x, 0.f, 1.f);
-    return (uint16_t)(x * ((1u << 12) - 1u));
-}
-*/
 
 void ProgDay::update(uint32_t now)
 {
@@ -200,13 +227,7 @@ void ProgDay::update(uint32_t now)
     float p2 = basePhase + 1.3f; // offset voor tweede LED
 
     // Schaal naar dynamische resolutie per kanaal
-    //uint16_t max1 = ch1.maxDuty();
-    //uint16_t max2 = ch2.maxDuty();
     uint16_t maxv = leds.maxDuty();
-
-
-    //auto scale = [](float x, uint16_t maxv){ x = constrain(x, 0.f, 1.f); return (uint16_t)(x * maxv); };
-
     uint16_t d1 = scale(0.35f + 0.25f*(0.5f+0.5f*sinf(p1)), maxv);
     uint16_t d2 = scale(0.35f + 0.25f*(0.5f+0.5f*sinf(p2)), maxv);
 
@@ -215,9 +236,7 @@ void ProgDay::update(uint32_t now)
     if(sparkle1>0){ d1 = (uint16_t)min<uint32_t>(maxv, (uint32_t)d1 + sparkle1); sparkle1-=50; }
     if(sparkle2>0){ d2 = (uint16_t)min<uint32_t>(maxv, (uint32_t)d2 + sparkle2); sparkle2-=50; }
     
-    //ch1.setDuty(d1);
-    //ch2.setDuty(d2);
     // i.p.v. twee kanalen: neem het gemiddelde of de max als “basis” en laat LedSet schalen per weight
     uint16_t base = max(d1, d2);           // of (d1+d2)/2 voor zachter
-    leds.setAllScaled(base);
+    setAllMasked(base); //was: leds.setAllScaled(base);
 }
