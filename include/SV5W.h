@@ -204,12 +204,13 @@ public:
   // Low-level: send arbitrary command with a data buffer
   void sendWithData(Command cmd, const uint8_t* data, uint8_t len) {
     if (!serial_){
-      //Serial.println(F("ERROR: no serial!"));
+      Serial.println(F("ERROR: no serial!"));
       return;
     } 
     const uint8_t start = 0xAA; //Start byte SV5W command
     const uint8_t c = (uint8_t)cmd;
     uint8_t checksum = start + c + len;
+    //Serial.println(cmd)
     serial_->write(start);
     serial_->write(c);
     serial_->write(len);

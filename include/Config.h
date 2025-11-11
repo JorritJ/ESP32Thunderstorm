@@ -23,14 +23,12 @@ constexpr int PIN_BUSY = 4; // SV5W BUSY (actief LOW)
 // === Knoppen ===
 constexpr int PIN_BTN_NEXT = 12; // active LOW, interne pull-up
 constexpr int PIN_BTN_PREV = 14; // active LOW, interne pull-up
-
 constexpr int PIN_BTN_VOL_UP = 18; // active LOW, interne pull-up
 constexpr int PIN_BTN_VOL_DOWN = 19; // active LOW, interne pull-up
-
+//Hardware: externe 10 kΩ pull-up + 100 nF over elke volumeknop doet wonderen tegen ruis.
 
 // === LED PWM (LEDC) ===
 constexpr int LED_COUNT = 4; // <— PAS AAN: totaal aantal ledkanalen
-
 // Kanalen & pinnen (index 0..LED_COUNT-1)
 constexpr int LEDC_CH[LED_COUNT]   = { 0, 1, 2, 3 };     // <— extra kanalen
 constexpr int PIN_LED[LED_COUNT]   = { 25, 26, 27, 33 }; // <— jouw pins
