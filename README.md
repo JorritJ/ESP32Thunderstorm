@@ -34,7 +34,7 @@ Het geheel is non-blocking, reageert continu op knoppen en kan eenvoudig worden 
 | VCC         | 5 V                                  |
 | GND         | GND                                  |
 
-1 kΩ serieweerstand op TX naar RX van de sv5w voorkomt oversturing van de ingang. 1 kΩ pulldown naar GND
+1 kΩ serieweerstand op TX naar RX van de sv5w voorkomt oversturing van de ingang. 2k kΩ pulldown naar GND
 ---
 
 ## Installatie & Build
@@ -143,14 +143,16 @@ De `SV5W`-klasse ondersteunt:
 1. In `Config.h`:
 
    ```cpp
-   constexpr int LED_COUNT = 4;
-   constexpr int LEDC_CH[LED_COUNT] = {0,1,2,3};
-   constexpr int PIN_LED[LED_COUNT] = {25,26,27,33};
+   constexpr int LED_COUNT = 4; //aantal leds
+   constexpr int LEDC_CH[LED_COUNT] = {0,1,2,3}; //toekenning aan array
+   constexpr int PIN_LED[LED_COUNT] = {25,26,27,33}; //daadwerkelijke led pins
    ```
-2. Voeg eventueel extra scenario-gewichten toe:
+   
+2. Voeg eventueel extra scenario-gewichten toe, (1.00f = ja, 0.00f = negeren):
 
    ```cpp
    constexpr float SCENARIO_NIGHT_WEIGHTS[LED_COUNT] = {0.2f, 0.2f, 0.8f, 0.1f};
+   constexpr float LEDSET_BLINK_WEIGHTS[LED_COUNT]   = { 0.0f, 1.0f, 0.0f, 0.0f };
    ```
 3. Maak een nieuwe `LedSet` en `LightProgram`-klasse (zoals ProgDay) voor jouw scenario.
 
@@ -178,8 +180,9 @@ De `SV5W`-klasse ondersteunt:
 ## Wiring
 
 1. LEDs
+```
 NPN-transistor (bijv. BC547(CBE) / 2N2222 (EBC))
-5V ---/\/\/---|>|----+--- (collector)
+5V ---/\/\/---|>|----+--- (collector) (220Ω–470Ω)
               LED    |
                      |
                      C NPN transistor
@@ -195,10 +198,11 @@ MOSFET (bijv. IRLZ44N, AO3400, 2N7002)
                        |
                       GND
 ESP32 PWM ----[100Ω]---G (gate)
+```
 
 2. componentwaarden
 Onderdeel	Waarde	Opmerking
-R_LED	220 Ω – 470 Ω	afhankelijk van LED en gewenste helderheid
+R_LED	220Ω – 470Ω	afhankelijk van LED en gewenste helderheid
 R_BASE (transistor)	1 kΩ	beperkt basisstroom tot ±3 mA
 R_GATE (MOSFET)	100 Ω	voorkomt oscillatie bij snelle PWM
 

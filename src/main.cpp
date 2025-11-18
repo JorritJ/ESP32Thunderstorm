@@ -1,6 +1,7 @@
 // --- file: example_usage.ino
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <strings.h>   // voor strcasecmp op ESP32
 #include "SV5W.h"
 #include "Button.h"
 #include "LedPwm.h"
@@ -23,6 +24,18 @@
 // ===================== Serial2 definitie (indien core het niet aanbiedt) =====================
 //HardwareSerial Serial2(2);   // gebruik UART2 (hardware poort 2)
 
+// --- Serial debug: command buffer + volume state
+static char gSerBuf[32];
+static uint8_t gSerLen = 0;
+static uint8_t gVolume = Config::VOLUME_DEFAULT; // gedeeld tussen knoppen & serial
+// Zorg dat Mode hier al bekend is:
+enum class Mode { Thunder = 0, Day = 1, COUNT };
+extern Mode currentMode;
+
+// Vooruitdeclaraties (staan elders daadwerkelijk gedefinieerd)
+void startMode(Mode m, uint32_t now);
+void nextMode(uint32_t now);
+void prevMode(uint32_t now);
 
 // ===================== Buttons =====================
 Button btnNext{Config::PIN_BTN_NEXT,true};
@@ -45,12 +58,12 @@ inline bool sv5wBusyRaw() { return digitalRead(Config::PIN_BUSY) == LOW; } // LO
 
 
 // ===================== Lichtprogramma's =====================
-enum class Mode
+/*enum class Mode
 {
   Thunder = 0,
   Day = 1,
   COUNT
-};
+};*/
 Mode currentMode = Mode::Thunder;
 
 static BlinkOverlay gBlink; // globale knipper-overlay
@@ -100,6 +113,7 @@ void startMode(Mode m, uint32_t now)
   if (currentProg)
     currentProg->start(now);
 }
+
 void nextMode(uint32_t now)
 {
   int n = (int)Mode::COUNT;
@@ -115,6 +129,73 @@ void prevMode(uint32_t now)
   startMode((Mode)cur, now);
 }
 
+// Zelfde acties als knoppen, maar via Serial
+static void doNext(uint32_t now) {
+  Serial.println(F("CMD: NEXT"));
+  nextMode(now);
+}
+static void doPrev(uint32_t now) {
+  Serial.println(F("CMD: PREV"));
+  prevMode(now);
+}
+static void doVolUp() {
+  if (gVolume < Config::VOLUME_MAX) {
+    gVolume++;
+    sv5w.setVolume(gVolume);
+    Serial.print(F("CMD: VOL+ -> ")); Serial.println(gVolume);
+  } else {
+    Serial.println(F("CMD: VOL+ (already at max)"));
+  }
+}
+static void doVolDown() {
+  if (gVolume > Config::VOLUME_MIN) {
+    gVolume--;
+    sv5w.setVolume(gVolume);
+    Serial.print(F("CMD: VOL- -> ")); Serial.println(gVolume);
+  } else {
+    Serial.println(F("CMD: VOL- (already at min)"));
+  }
+}
+
+static void printHelp() {
+  Serial.println(F("Serial cmds:"));
+  Serial.println(F("  n / next      -> NEXT mode"));
+  Serial.println(F("  p / prev      -> PREV mode"));
+  Serial.println(F("  + / vol+      -> volume up"));
+  Serial.println(F("  - / vol-      -> volume down"));
+  Serial.println(F("  h / help      -> this help"));
+}
+
+static void processSerialCmd(const char* cmd, uint32_t now) {
+  // trim spaties
+  while (*cmd==' ') ++cmd;
+  if (*cmd==0) return;
+
+  // simpele aliasen
+  if (!strcasecmp(cmd, "n") || !strcasecmp(cmd, "next")) { doNext(now); return; }
+  if (!strcasecmp(cmd, "p") || !strcasecmp(cmd, "prev")) { doPrev(now); return; }
+  if (!strcasecmp(cmd, "+") || !strcasecmp(cmd, "vol+") || !strcasecmp(cmd, "up")) { doVolUp(); return; }
+  if (!strcasecmp(cmd, "-") || !strcasecmp(cmd, "vol-") || !strcasecmp(cmd, "down")) { doVolDown(); return; }
+  if (!strcasecmp(cmd, "h") || !strcasecmp(cmd, "help") || !strcasecmp(cmd, "?")) { printHelp(); return; }
+
+  Serial.print(F("Unknown cmd: '")); Serial.print(cmd); Serial.println(F("' (type 'h')"));
+}
+
+static void pollSerial(uint32_t now) {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      gSerBuf[gSerLen] = 0;
+      processSerialCmd(gSerBuf, now);
+      gSerLen = 0;
+    } else {
+      if (gSerLen < sizeof(gSerBuf) - 1) gSerBuf[gSerLen++] = c;
+      else gSerLen = 0; // overflow guard -> reset
+    }
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -124,6 +205,10 @@ void setup()
   btnPrev.begin();
   btnVolUp.begin();
   btnVolDown.begin();
+
+  printHelp();
+  gVolume = Config::VOLUME_DEFAULT;
+  sv5w.setVolume(gVolume);
   
   //sv5w BUSY pin initialiseren
   busyRaw   = sv5wBusyRaw();
@@ -157,7 +242,7 @@ void setup()
   // SV5W init
   sv5w.begin(Serial2, Config::UART_RX_PIN, Config::UART_TX_PIN, Config::UART_BAUD);
   delay(100);
-  sv5w.setVolume(Config::VOLUME_DEFAULT);
+  sv5w.setVolume(gVolume);
   // Kies desgewenst standaard-drive (0x00=USB, 0x01=SD, 0x02=FLASH)
   sv5w.setDefaultDrive(0x01);
 
@@ -200,7 +285,7 @@ void setup()
 
 void loop()
 {
-  static uint8_t volume = Config::VOLUME_DEFAULT;
+  static uint8_t volume = gVolume;
   uint32_t now = millis();
   
   //initialeseer knoppen:
@@ -208,6 +293,8 @@ void loop()
   btnPrev.update(now);
   btnVolUp.update(now);
   btnVolDown.update(now);
+
+  pollSerial(now);
 
   // --- SV5W BUSY monitoring met debounce
   bool r = sv5wBusyRaw();

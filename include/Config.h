@@ -33,20 +33,13 @@ constexpr int LED_COUNT = 4; // <— PAS AAN: totaal aantal ledkanalen
 constexpr int LEDC_CH[LED_COUNT]   = { 0, 1, 2, 3 };     // <— extra kanalen
 constexpr int PIN_LED[LED_COUNT]   = { 25, 26, 27, 33 }; // <— jouw pins
 
-
-
 // === Scenario-profielen ===
-// Per scenario een "gewicht" (0..1) per LED-kanaal (kleur/intensiteit basis)
-// Thunder: bv. 2 “witte” kanalen dominant
-//constexpr float SCENARIO_THUNDER_WEIGHTS[LED_COUNT] = {1.00f, 1.00f, 0.20f, 0.20f}; //SCENARIO_THUNDER_WEIGHTS->LEDSET_THUNDER_WEIGHTS
-// Day: bv. alle kanalen zacht met nuance
-//constexpr float SCENARIO_DAY_WEIGHTS[LED_COUNT] = {0.35f, 0.40f, 0.30f, 0.25f}; //SCENARIO_DAY_WEIGHTS->LEDSET_DAY_WEIGHTS
 
 // === LED-set per scenario ===
-constexpr float LEDSET_THUNDER_WEIGHTS[LED_COUNT] = { 1.00f, 1.00f, 0.20f, 0.20f };
-constexpr float LEDSET_DAY_WEIGHTS[LED_COUNT]     = { 0.35f, 0.40f, 0.30f, 0.25f };
-// Knipperlicht: kies expliciet welke kanalen mogen knipperen (1.0 = ja, 0.0 = negeren)
-constexpr float LEDSET_BLINK_WEIGHTS[LED_COUNT]   = { 0.0f, 1.0f, 0.0f, 0.0f };
+constexpr float LEDSET_THUNDER_WEIGHTS[LED_COUNT] = { 1.00f, 0.50f, 0.20f, 0.00f };
+constexpr float LEDSET_DAY_WEIGHTS[LED_COUNT]     = { 0.35f, 0.15f, 0.02f, 0.00f };
+// Knipperlicht: kies expliciet welke kanalen mogen knipperen (1.00f = ja, 0.00f = negeren)
+constexpr float LEDSET_BLINK_WEIGHTS[LED_COUNT]   = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 /*
 Idee: koppel elke LED-index aan een fysieke kleur (bijv. LED 0 = koud wit, LED 1 = warm wit, LED 2 = blauw, etc.).

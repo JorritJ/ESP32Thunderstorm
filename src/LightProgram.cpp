@@ -24,7 +24,7 @@ void ProgThunder::scheduleNextBurst(uint32_t now)
 {
     // Maak timing minder uniform: vaker kort, soms lang (clustered storms)
     float r = rand01();
-    uint32_t shortGap = 800 + (uint32_t)(r * r * 4000); // 0.8..4.8 s met bias naar kort
+    uint32_t shortGap = 3500 + (uint32_t)(r * r * 4000); // 0.8..4.8 s met bias naar kort
     if ((esp_random() % 10) == 0)
     {                                      // 10% kans op langere stilte
         shortGap += randRange(3000, 6000); // +3..6 s extra
@@ -49,7 +49,7 @@ void ProgThunder::prepareBurst(uint32_t now)
     float base = 0.60f + 0.40f * rand01();
     for (int i = 0; i < subsTotal; ++i)
     {
-        float falloff = 1.0f - 0.15f * i;        // elke sub iets zwakker
+        float falloff = 1.0f - 0.20f * i;        // elke sub iets zwakker
         float jitter = 0.90f + 0.20f * rand01(); // ±10%
         float level = base * falloff * jitter;
         if (level > 1.0f)
@@ -58,7 +58,8 @@ void ProgThunder::prepareBurst(uint32_t now)
     }
 
     // 2) Kleine kanaalverschuiving 8..25 ms
-    chSkewMs = randRange(8, 25);
+    //chSkewMs = randRange(8, 25);
+    chSkewMs = randRange(500,1500);
 
     // 3) Start met Preglow naar ~40% van eerste sub
     phase = PreGlow;
@@ -122,7 +123,8 @@ void ProgThunder::update(uint32_t now)
             // ga kort uit tussen subflitsen
             phase = FlashOff;
             phaseStart = now;
-            uint32_t offDur = randRange(30, 120); // random tijd uit,
+            //uint32_t offDur = randRange(30, 120); // random tijd uit,
+            uint32_t offDur = randRange(120, 300); // random tijd uit,
             phaseEnd = phaseStart + offDur;
             setAllMasked(0);
         }
@@ -141,7 +143,8 @@ void ProgThunder::update(uint32_t now)
                 phase = FlashOn;
                 phaseStart = now;
                 afterStartDuty = (uint16_t)(subIntensity[subsIndex - 1] * 0.4f); // voor nagloei
-                uint32_t glowDur = randRange(10, 50);                           // random tijd aan
+                //uint32_t glowDur = randRange(10, 50);                           // random tijd aan
+                uint32_t glowDur = randRange(30, 200);                           // random tijd aan
                 phaseEnd = phaseStart + glowDur;
             }
             else
@@ -150,7 +153,8 @@ void ProgThunder::update(uint32_t now)
                 phase = AfterGlow;
                 phaseStart = now;
                 afterStartDuty = (uint16_t)(subIntensity[subsTotal - 1] * 0.4f); // startwaarde nagloei
-                uint32_t glowDur = randRange(70, 150);                           // random nagloeitijd
+                //uint32_t glowDur = randRange(70, 150);                           // random nagloeitijd
+                uint32_t glowDur = randRange(100, 500);                           // random nagloeitijd
                 phaseEnd = phaseStart + glowDur;
             }
         }
@@ -220,7 +224,8 @@ void ProgDay::update(uint32_t now)
     if (now < nextUpdate)
         return;
     nextUpdate = now + 10; // ~100 Hz
-    basePhase += 0.015f; // speed
+    //basePhase += 0.015f; // speed: kleine waarde = langzame golf
+    basePhase += 0.055f;
     if (basePhase > TwoPi)
         basePhase -= TwoPi;
     float p1 = basePhase; // fase voor eerste LED
@@ -237,6 +242,7 @@ void ProgDay::update(uint32_t now)
     if(sparkle2>0){ d2 = (uint16_t)min<uint32_t>(maxv, (uint32_t)d2 + sparkle2); sparkle2-=50; }
     
     // i.p.v. twee kanalen: neem het gemiddelde of de max als “basis” en laat LedSet schalen per weight
-    uint16_t base = max(d1, d2);           // of (d1+d2)/2 voor zachter
+    //uint16_t base = max(d1, d2);           // of (d1+d2)/2 voor zachter
+    uint16_t base = (d1 + d2) / 2;
     setAllMasked(base); //was: leds.setAllScaled(base);
 }

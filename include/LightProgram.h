@@ -45,8 +45,8 @@ private:
     uint16_t chOffsetMs[kMaxCh] = {0};       // per kanaal random 0..25 ms
     void refreshOffsets(uint16_t intensity); // berekent offsets per subflits
     
-    static uint32_t randRange(uint32_t a, uint32_t b) { return a + (esp_random() % (b - a + 1)); }
-    static float rand01() { return (esp_random() & 0xFFFF) / 65535.0f; }
+    static uint32_t randRange(uint32_t a, uint32_t b) { return a + (esp_random() % (b - a + 1)); } //return random int in [a,b]
+    static float rand01() { return (esp_random() & 0xFFFF) / 65535.0f; } //return random float in [0..1]
 
     // helpers:
     void setAll(uint16_t d) { leds.setAllScaled(d); } // <— scaled per scenario-weight
