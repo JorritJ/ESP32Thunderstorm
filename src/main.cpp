@@ -9,6 +9,7 @@
 #include "Config.h"
 #include "LedSet.h"
 #include "BlinkOverlay.h" // voor knipper-overlay
+#include "LaternController.h" // voor lantaarnpalen aansturing
 
 /*
 // ======= CONDITIONELE INCLUDES =======
@@ -23,14 +24,23 @@
 
 // ===================== Serial2 definitie (indien core het niet aanbiedt) =====================
 //HardwareSerial Serial2(2);   // gebruik UART2 (hardware poort 2)
+//Zie https://www.luisllamas.es/en/esp32-uart/
 
 // --- Serial debug: command buffer + volume state
 static char gSerBuf[32];
 static uint8_t gSerLen = 0;
 static uint8_t gVolume = Config::VOLUME_DEFAULT; // gedeeld tussen knoppen & serial
+
 // Zorg dat Mode hier al bekend is:
-enum class Mode { Thunder = 0, Day = 1, COUNT };
+enum class Mode { 
+  Thunder = 0, 
+  Day = 1, 
+  NightClear = 2,
+  NightThunder = 3,
+  COUNT //totaal aantal modes
+};
 extern Mode currentMode;
+Mode currentMode = Mode::Thunder; //start met thunder
 
 // Vooruitdeclaraties (staan elders daadwerkelijk gedefinieerd)
 void startMode(Mode m, uint32_t now);
@@ -46,8 +56,9 @@ Button btnVolDown(Config::PIN_BTN_VOL_DOWN, true);
 
 // ===================== DY-SV5W =====================
 SV5W sv5w;
-constexpr uint16_t TRACK_THUNDER = Config::TRACK_THUNDER; // pas aan naar jouw index/bestandsnaam
-constexpr uint16_t TRACK_DAY = Config::TRACK_DAY; // pas aan naar jouw index/bestandsnaam
+constexpr uint16_t TRACK_THUNDER = Config::TRACK_THUNDER; 
+constexpr uint16_t TRACK_DAY = Config::TRACK_DAY; 
+constexpr uint16_t TRACK_NIGHT_CLEAR = Config::TRACK_NIGHT_CLEAR; 
 
 // --- SV5W BUSY monitoring (active LOW)
 static bool busyState = false;               // gefilterde/stabiele staat
@@ -58,15 +69,28 @@ inline bool sv5wBusyRaw() { return digitalRead(Config::PIN_BUSY) == LOW; } // LO
 
 
 // ===================== Lichtprogramma's =====================
-/*enum class Mode
-{
+/*
+enum class Mode : uint8_t {
   Thunder = 0,
-  Day = 1,
-  COUNT
-};*/
-Mode currentMode = Mode::Thunder;
+  Day     = 1,
+  Evening = 2,        // nieuw: lantaarnpalen aan, dag-LEDs uit
+  NightThunder = 3    // nieuw: thunder + lantaarnpalen aan
+};
+static UiScenario gScenarion = UiScenario::DAY;
+
+static inline void lampsBegin(){
+  pinMode(Config::PIN_LAMPS, OUTPUT);
+  digitalWrite(Config::PIN_LAMPS, Config::LAMPS_ACTIVE_HIGH ? LOW : HIGH); // uit bij start
+}
+
+static inline void lampsSet(bool on){
+  digitalWrite(Config::PIN_LAMPS, (on ^ !Config::LAMPS_ACTIVE_HIGH) ? HIGH : LOW);
+}
+*/
+
 
 static BlinkOverlay gBlink; // globale knipper-overlay
+static LanternController gLanterns; // globale lantaarncontroller
 
 // Led kanalen:
 static LedPwmChannel* LEDS[Config::LED_COUNT];
@@ -80,13 +104,70 @@ static LedSet* blinkSetPtr   = nullptr;
 static ProgThunder* progThunderPtr = nullptr;
 static ProgDay*     progDayPtr     = nullptr;
 
+// Helpers om bestaande pointers te gebruiken:
+static LightProgram* getThunderProg() { return progThunderPtr; }
+static LightProgram* getDayProg()     { return progDayPtr;     }
+
+// Koppel hoofdmodus -> (programma, track, lantern aan/uit)
+struct ModeSpec {
+  LightProgram* (*progPtrGetter)(); // lazy getter zodat pointers nooit null blijven
+  int audioTrack;
+  bool lanternOn;
+};
+
+// Voor Thunder (legacy) kun je die laten wijzen naar thunder-programma + thunder-track
+static const ModeSpec MODE_TABLE[static_cast<int>(Mode::COUNT)] = {
+  /* Thunder            */ { getThunderProg,       TRACK_THUNDER,       false },
+  /* Day                */ { getDayProg,           TRACK_DAY,           false },
+  /* NightClear         */ { getDayProg,           TRACK_NIGHT_CLEAR,   true  },
+  /* NightThunderstorm  */ { getThunderProg,       TRACK_THUNDER,       true  },
+};
+
 static inline LedSet* activeSet() {
-  return (currentMode == Mode::Thunder) ? thunderSetPtr : daySetPtr;
+  //return (currentMode == Mode::Thunder) ? thunderSetPtr : daySetPtr;
+  switch (currentMode) {
+    case Mode::Thunder:
+    case Mode::Day:
+    case Mode::NightClear:
+    case Mode::NightThunder: return thunderSetPtr;
+    default: return daySetPtr;
+
+  }
 }
 
 LightProgram *currentProg = nullptr;
 
 void startMode(Mode m, uint32_t now)
+{
+  // voorkom waarde buiten bereik
+  int n = static_cast<int>(Mode::COUNT);
+  int idx = ((static_cast<int>(m) % n) + n) % n;
+  m = static_cast<Mode>(idx);
+
+  currentMode = m;
+
+  // Audio stoppen en kleine settle
+  sv5w.stop();
+  delay(100);
+
+  // Lookup
+  const ModeSpec& spec = MODE_TABLE[idx];
+
+  // Lantaarns
+  gLanterns.set(spec.lanternOn);
+
+  // Audio starten
+  sv5w.playTrack(spec.audioTrack);
+
+  // Lichtprogramma selecteren
+  currentProg = spec.progPtrGetter();
+  if (currentProg) {
+    currentProg->start(now);
+  }
+}
+
+
+void startMode2(Mode m, uint32_t now)
 {
   currentMode = m;
   sv5w.stop();
@@ -114,6 +195,7 @@ void startMode(Mode m, uint32_t now)
     currentProg->start(now);
 }
 
+//switchen naar volgende/vorige mode, met wrap-around om binnen het aantal modes te blijven
 void nextMode(uint32_t now)
 {
   int n = (int)Mode::COUNT;
@@ -205,6 +287,7 @@ void setup()
   btnPrev.begin();
   btnVolUp.begin();
   btnVolDown.begin();
+  gLanterns.begin();
 
   printHelp();
   gVolume = Config::VOLUME_DEFAULT;
@@ -326,7 +409,7 @@ void loop()
       volume++;
       sv5w.setVolume(volume);
       Serial.print(F("Volume verhoogd naar ")); Serial.println(volume);
-      //sv5w.increaseVolume();
+      sv5w.increaseVolume();
     }
   }
 
@@ -335,10 +418,15 @@ void loop()
       volume--;
       sv5w.setVolume(volume);
       Serial.print(F("Volume verlaagd naar ")); Serial.println(volume);
-      //sv5w.decreaseVolume();
+      sv5w.decreaseVolume();
     }
   }
-  
+  /*
+  //Voorbeeld om handmatig lantaarnpalen te schakelen via een knop
+  if (button3.consumePressed()) {
+  gLanterns.set(!gLanterns.isOn());  // handmatig overrule
+  }
+  */
   if (currentProg)
     currentProg->update(now);
 

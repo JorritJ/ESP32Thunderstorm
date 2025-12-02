@@ -34,7 +34,18 @@ Het geheel is non-blocking, reageert continu op knoppen en kan eenvoudig worden 
 | VCC         | 5 V                                  |
 | GND         | GND                                  |
 
-1 kΩ serieweerstand op TX naar RX van de sv5w voorkomt oversturing van de ingang. 2k kΩ pulldown naar GND
+ESP32 TX2 (GPIO17)  →  SV5W RX   (met evt. 1 k in serie)
+ESP32 RX2 (GPIO16)  ←  SV5W TX   (via 10 k/20 k spanningsdeler, of een andere waarde 1:2)
+GND ↔ GND,  +5 V ↔ VCC
+
+De DY-SV5W werkt intern op 5 V logica.
+De ESP32 werkt op 3,3 V logica.
+→ Dus:
+
+Van ESP32 → SV5W (TX2 → RX) = veilig (3.3 V is hoog genoeg voor 5 V-logica).
+
+Van SV5W → ESP32 (TX → RX2) = NIET veilig direct, want 5 V kan de ESP32-input beschadigen.
+Daarom verlagen we dat signaal met een spanningsdeler.
 ---
 
 ## Installatie & Build
@@ -206,18 +217,24 @@ R_LED	220Ω – 470Ω	afhankelijk van LED en gewenste helderheid
 R_BASE (transistor)	1 kΩ	beperkt basisstroom tot ±3 mA
 R_GATE (MOSFET)	100 Ω	voorkomt oscillatie bij snelle PWM
 
+
+
 ---
 
-Onderdeel	Aantal	Voorbeeldtype	Opmerking
-ESP32 Dev Kit	1	DOIT ESP32 DEVKIT V1	Hoofdcontroller
-DY-SV5W Module	1	DY-SV5W	Geluidsmodule (UART-modus)
-LED’s (5 mm / 3 mm)	4–8	willekeurige kleuren	20 mA, max. 2.0–3.3 V per LED
-Weerstanden LED	4–8	220–470 Ω	in serie met elke LED
-NPN-transistoren	4	BC547 / 2N2222	schakelen LED’s op 5 V (of gebruik MOSFETs)
-MOSFETs (alternatief)	4	2N7002 / AO3400 / IRLZ44N	Logic-level, lage gate threshold
-Weerstanden basis/gate	4	1 kΩ (transistor) / 100 Ω (MOSFET)	aansturing vanaf ESP32-pin
-5V voeding	1	5V DC adapter, 1A	voor ESP32, DY-SV5W en LED’s
-Breadboard & jumpers	-	-	voor prototyping
-Draden (GND-koppeling)	-	-	verbind alle GND’s!
+| Onderdeel	             | Aantal | Voorbeeldtype           | Opmerking            |
+| ---------------------- | ---------------------------------- | -------------------- |
+| ESP32 Dev Kit          | 1      |	DOIT ESP32 DEVKIT V1      | Hoofdcontroller      |
+| DY-SV5W Module         | 1      |	DY-SV5W                   | Geluidsmodule (UART-modus)
+| LED’s (5 mm / 3 mm)    | 4–8    | willekeurige kleuren	     | 20 mA, max. 2.0–3.3 V per LED
+| Weerstanden LED        | 4–8    | 220–470 Ω                 | in serie met elke LED |
+| NPN-transistoren       | 4      | BC547 / 2N2222            | schakelen LED’s op 5 V (of gebruik MOSFETs) |
+| MOSFETs (alternatief)  | 4      | 2N7002 / AO3400 / IRLZ44N | Logic-level, lage gate threshold |
+| Weerstanden basis/gate | 4      | 1 kΩ (transistor) / 100Ω (MOSFET) | aansturing vanaf ESP32-pin |
+| 5V voeding             | 1      | 5V DC adapter, 1A         | voor ESP32, DY-SV5W en LED’s |
+| Breadboard & jumpers   | -      | -                         | voor prototyping |
+| Draden (GND-koppeling) | -      | -                         | verbind alle GND’s! |
 
--
+
+-Geel licht 20mA
+-Lataarnpaal 10mA p/s
+-Flitsen 30mA
